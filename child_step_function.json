@@ -1,0 +1,271 @@
+{
+  "StartAt": "1.Update Source Row Count for task",
+  "States": {
+    "1.Update Source Row Count for task": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "${DummyFunctionArn}"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "2.Custom Pre-task processing (if required)"
+    },
+    "2.Custom Pre-task processing (if required)": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "${DummyFunctionArn}"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "3.Start DMS Task"
+    },
+    "3.Start DMS Task": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "${DummyFunctionArn}"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "4.Check DMS Task Status"
+    },
+    "4.Check DMS Task Status": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "${DummyFunctionArn}"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "5.Is DMS Task Complete?"
+    },
+    "5.Is DMS Task Complete?": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.count_status",
+          "StringEquals": "Success",
+          "Next": "6.Wait For DMS Tasks To Complete"
+        }
+      ],
+      "Default": "14.Overall Notify Failures"
+    },
+    "6.Wait For DMS Tasks To Complete": {
+      "Type": "Wait",
+      "Seconds": 1,
+      "Next": "7.Check Availability of data in S3"
+    },
+    "7.Check Availability of data in S3": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "ResultPath": "$.taskresult",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "${DummyFunctionArn}"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "8.Is Data Available in S3"
+    },
+    "8.Is Data Available in S3": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.data_available_in_s3",
+          "StringEquals": "Success",
+          "Next": "10.Verify Row Count"
+        }
+      ],
+      "Default": "9.Wait for data available in S3"
+    },
+    "10.Verify Row Count": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "${DummyFunctionArn}"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "11.Custom Post Task Processing (if required)"
+    },
+    "11.Custom Post Task Processing (if required)": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "${DummyFunctionArn}"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "12.Cleanup (if required)"
+    },
+    "12.Cleanup (if required)": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "${DummyFunctionArn}"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "13.Overall Notify Success"
+    },
+    "9.Wait for data available in S3": {
+      "Type": "Wait",
+      "Seconds": 5,
+      "Next": "7.Check Availability of data in S3"
+    },
+    "Overall Task Completed": {
+      "Type": "Succeed"
+    },
+    "13.Overall Notify Success": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "ResultPath": "$.taskresult",
+      "Parameters": {
+        "TopicArn": "${TopicArn}",
+        "Message": {
+          "Subject": "Task Completed Successfully",
+          "Message.$": "$.message"
+        }
+      },
+      "Next": "Overall Task Completed",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.TaskFailed",
+            "SNS.SdkClientException"
+          ],
+          "BackoffRate": 2,
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "Comment": "SNS Retrier"
+        }
+      ]
+    },
+    "14.Overall Notify Failures": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "ResultPath": "$.taskresult",
+      "Parameters": {
+        "TopicArn": "${TopicArn}",  
+        "Message": {
+          "ConfigId.$": "$.configIds",
+          "Partition.$": "$.partition_name",
+          "ErrorItems.$": "$.message",
+          "Subject": "Data Migration Task failed for Partition:"
+        }
+      },
+      "Next": "Overall Tasks Failed",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.TaskFailed",
+            "SNS.SdkClientException"
+          ],
+          "BackoffRate": 2,
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "Comment": "SNS Retrier"
+        }
+      ]
+    },
+    "Overall Tasks Failed": {
+      "Type": "Fail"
+    }
+  }
+}

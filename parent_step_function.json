@@ -1,0 +1,406 @@
+{		  
+          "StartAt": "1. Generate list of tasks",
+          "States": {
+        	"1. Generate list of tasks": {
+        	  "Type": "Task",
+        	  "Resource": "arn:aws:states:::lambda:invoke",
+        	  "OutputPath": "$.Payload",
+        	  "Parameters": {
+        		"Payload.$": "$",
+        		"FunctionName": "${DummyFunctionArn}"
+        	  },
+        	  "Retry": [
+        		{
+        		  "ErrorEquals": [
+        			"Lambda.ServiceException",
+        			"Lambda.AWSLambdaException",
+        			"Lambda.SdkClientException"
+        		  ],
+        		  "IntervalSeconds": 2,
+        		  "MaxAttempts": 6,
+        		  "BackoffRate": 2
+        		}
+        	  ],
+        	  "Next": "2. Are Tasks Created?"
+        	},
+        	"2. Are Tasks Created?": {
+        	  "Type": "Choice",
+        	  "Choices": [
+        		{
+        		  "Variable": "$.tasks_created",
+        		  "StringEquals": "Success",
+        		  "Next": "3. Create Replication Instances (If required)"
+        		}
+        	  ],
+        	  "Default": "25. Notify Failures"
+        	},
+        	"3. Create Replication Instances (If required)": {
+        	  "Type": "Task",
+        	  "Resource": "arn:aws:states:::lambda:invoke",
+        	  "OutputPath": "$.Payload",
+        	  "Parameters": {
+        		"Payload.$": "$",
+        		"FunctionName": "${CreateDMSRepInstanceFunctionArn}"
+        	  },
+        	  "Retry": [
+        		{
+        		  "ErrorEquals": [
+        			"Lambda.ServiceException",
+        			"Lambda.AWSLambdaException",
+        			"Lambda.SdkClientException"
+        		  ],
+        		  "IntervalSeconds": 2,
+        		  "MaxAttempts": 6,
+        		  "BackoffRate": 2
+        		}
+        	  ],
+        	  "Next": "4. Check DMS Replication Instance Status"
+        	},
+        	"4. Check DMS Replication Instance Status": {
+        	  "Type": "Task",
+        	  "Resource": "arn:aws:states:::lambda:invoke",
+        	  "OutputPath": "$.Payload",
+        	  "Parameters": {
+        		"Payload.$": "$",
+        		"FunctionName": "${CheckDMSRepInstanceFunctionArn}"
+        	  },
+        	  "Retry": [
+        		{
+        		  "ErrorEquals": [
+        			"Lambda.ServiceException",
+        			"Lambda.AWSLambdaException",
+        			"Lambda.SdkClientException"
+        		  ],
+        		  "IntervalSeconds": 2,
+        		  "MaxAttempts": 6,
+        		  "BackoffRate": 2
+        		}
+        	  ],
+        	  "Next": "5. Is Instance Created?"
+        	},
+        	"5. Is Instance Created?": {
+        	  "Type": "Choice",
+        	  "Choices": [
+        		{
+        		  "Variable": "$.instance_status",
+        		  "StringEquals": "Success",
+        		  "Next": "7. Scale up replication instances (if required)"
+        		},
+        		{
+        		  "Variable": "$.instance_status",
+        		  "StringEquals": "Failed",
+        		  "Next": "25. Notify Failures"
+        		}
+        	  ],
+        	  "Default": "6. Wait For Replication Instances"
+        	},
+        	"6. Wait For Replication Instances": {
+        	  "Type": "Wait",
+        	  "Seconds": 300,
+        	  "Next": "4. Check DMS Replication Instance Status"
+        	},
+        	"7. Scale up replication instances (if required)": {
+        	  "Type": "Task",
+        	  "Resource": "arn:aws:states:::lambda:invoke",
+        	  "OutputPath": "$.Payload",
+        	  "Parameters": {
+        		"Payload": {"expectedStatus":"Available"},
+        		"FunctionName": "${DummyFunctionArn}"
+        	  },
+        	  "Retry": [
+        		{
+        		  "ErrorEquals": [
+        			"Lambda.ServiceException",
+        			"Lambda.AWSLambdaException",
+        			"Lambda.SdkClientException"
+        		  ],
+        		  "IntervalSeconds": 2,
+        		  "MaxAttempts": 6,
+        		  "BackoffRate": 2
+        		}
+        	  ],
+        	  "Next": "8. Check Scale up status"
+        	},
+        	"8. Check Scale up status": {
+        	  "Type": "Task",
+        	  "Resource": "arn:aws:states:::lambda:invoke",
+        	  "OutputPath": "$.Payload",
+        	  "Parameters": {
+        		"Payload.$": "$",
+        		"FunctionName": "${CheckDMSRepInstanceFunctionArn}"
+        	  },
+        	  "Retry": [
+        		{
+        		  "ErrorEquals": [
+        			"Lambda.ServiceException",
+        			"Lambda.AWSLambdaException",
+        			"Lambda.SdkClientException"
+        		  ],
+        		  "IntervalSeconds": 2,
+        		  "MaxAttempts": 6,
+        		  "BackoffRate": 2
+        		}
+        	  ],
+        	  "Next": "9. Is Scale up complete?"
+        	},
+        	"9. Is Scale up complete?": {
+        	  "Type": "Choice",
+        	  "Choices": [
+        		{
+        		  "Variable": "$.scale_up_status",
+        		  "StringEquals": "Success",
+        		  "Next": "11. Create Source/Target endpoints"
+        		},
+        		{
+        		  "Variable": "$.scale_up_status",
+        		  "StringEquals": "Failed",
+        		  "Next": "25. Notify Failures"
+        		}
+        	  ],
+        	  "Default": "10. Wait For Scale up"
+        	},
+        	"11. Create Source/Target endpoints": {
+        	  "Type": "Task",
+        	  "Resource": "arn:aws:states:::lambda:invoke",
+        	  "OutputPath": "$.Payload",
+        	  "Parameters": {
+        		"Payload.$": "$",
+        		"FunctionName": "${DummyFunctionArn}"
+        	  },
+        	  "Retry": [
+        		{
+        		  "ErrorEquals": [
+        			"Lambda.ServiceException",
+        			"Lambda.AWSLambdaException",
+        			"Lambda.SdkClientException"
+        		  ],
+        		  "IntervalSeconds": 2,
+        		  "MaxAttempts": 6,
+        		  "BackoffRate": 2
+        		}
+        	  ],
+        	  "Next": "12. Check endpoint creation status"
+        	},
+        	"12. Check endpoint creation status": {
+        	  "Type": "Task",
+        	  "Resource": "arn:aws:states:::lambda:invoke",
+        	  "OutputPath": "$.Payload",
+        	  "Parameters": {
+        		"Payload.$": "$",
+        		"FunctionName": "${DummyFunctionArn}"
+        	  },
+        	  "Retry": [
+        		{
+        		  "ErrorEquals": [
+        			"Lambda.ServiceException",
+        			"Lambda.AWSLambdaException",
+        			"Lambda.SdkClientException"
+        		  ],
+        		  "IntervalSeconds": 2,
+        		  "MaxAttempts": 6,
+        		  "BackoffRate": 2
+        		}
+        	  ],
+        	  "Next": "13. Are endpoints created?"
+        	},
+        	"13. Are endpoints created?": {
+        	  "Type": "Choice",
+        	  "Choices": [
+        		{
+        		  "Variable": "$.endpoints_created",
+        		  "StringEquals": "Success",
+        		  "Next": "15. Delete Old Tasks"
+        		},
+        		{
+        		  "Variable": "$.endpoints_created ",
+        		  "StringEquals": "Failed",
+        		  "Next": "25. Notify Failures"
+        		}
+        	  ],
+        	  "Default": "14. Wait for endpoint creation"
+        	},
+        	"14. Wait for endpoint creation": {
+        	  "Type": "Wait",
+        	  "Seconds": 300,
+        	  "Next": "12. Check endpoint creation status"
+        	},
+        	"15. Delete Old Tasks": {
+        	  "Type": "Task",
+        	  "Resource": "arn:aws:states:::lambda:invoke",
+        	  "ResultPath": null,
+        	  "Parameters": {
+        		"Payload.$": "$",
+        		"FunctionName": "${DummyFunctionArn}"
+        	  },
+        	  "Retry": [
+        		{
+        		  "ErrorEquals": [
+        			"Lambda.ServiceException",
+        			"Lambda.AWSLambdaException",
+        			"Lambda.SdkClientException"
+        		  ],
+        		  "IntervalSeconds": 2,
+        		  "MaxAttempts": 6,
+        		  "BackoffRate": 2
+        		}
+        	  ],
+        	  "Next": "16. Pick Child Task to execute",
+        	  "Comment": "This will clean tasks for which whole partition is success"
+        	},
+        	"16. Pick Child Task to execute": {
+        	  "Type": "Task",
+        	  "Resource": "arn:aws:states:::lambda:invoke",
+        	  "OutputPath": "$.Payload",
+        	  "Parameters": {
+        		"Payload.$": "$",
+        		"FunctionName": "${DummyFunctionArn}"
+        	  },
+        	  "Retry": [
+        		{
+        		  "ErrorEquals": [
+        			"Lambda.ServiceException",
+        			"Lambda.AWSLambdaException",
+        			"Lambda.SdkClientException"
+        		  ],
+        		  "IntervalSeconds": 2,
+        		  "MaxAttempts": 6,
+        		  "BackoffRate": 2
+        		}
+        	  ],
+        	  "Next": "17. Call Child task in parallel"
+        	},   
+        	"17. Call Child task in parallel": {
+        	  "Type": "Map",
+        	  "InputPath" : "$.parallelMap",
+        	  "Next": "19. Check All Tasks Completed?",
+        	  "Iterator": {
+        		"StartAt": "18. Child Task Step Function",
+        		"States": {
+        		  "18. Child Task Step Function": {
+        			"Type": "Task",
+        			"Resource": "arn:aws:states:::states:startExecution.sync:2",
+        			"Parameters": {
+        			  "StateMachineArn": "${ChildStateMachineArn}",
+        			  "Input": {
+        				"StatePayload": "Hello from Step Functions!",
+        				"AWS_STEP_FUNCTIONS_STARTED_BY_EXECUTION_ID.$": "$$.Execution.Id"
+        			  }
+        			},
+        			"End": true
+        		  }
+        		}
+        	  }
+        	},
+        	"19. Check All Tasks Completed?": {
+        	  "Type": "Task",
+        	  "Resource": "arn:aws:states:::lambda:invoke",
+        	  "OutputPath": "$.Payload",
+        	  "Parameters": {
+        		"Payload.$": "$",
+        		"FunctionName": "${DummyFunctionArn}"
+        	  },
+        	  "Retry": [
+        		{
+        		  "ErrorEquals": [
+        			"Lambda.ServiceException",
+        			"Lambda.AWSLambdaException",
+        			"Lambda.SdkClientException"
+        		  ],
+        		  "IntervalSeconds": 2,
+        		  "MaxAttempts": 6,
+        		  "BackoffRate": 2
+        		}
+        	  ],
+        	  "Next": "20. All Tasks Completed?"
+        	},
+        	"20. All Tasks Completed?": {
+        	  "Type": "Choice",
+        	  "Choices": [
+        		{
+        		  "Variable": "$.all_tasks_completed",
+        		  "StringEquals": "Success",
+        		  "Next": "21. Clean Success Tasks Final"
+        		},
+        		{
+        		  "Variable": "$.all_tasks_completed",
+        		  "StringEquals": "Failed",
+        		  "Next": "25. Notify Failures"
+        		}
+        	  ],
+        	  "Default": "15. Delete Old Tasks"
+        	},
+        	"21. Clean Success Tasks Final": {
+        	  "Type": "Task",
+        	  "Resource": "arn:aws:states:::lambda:invoke",
+        	  "ResultPath": null,
+        	  "Parameters": {
+        		"Payload.$": "$",
+        		"FunctionName": "${DummyFunctionArn}"
+        	  },
+        	  "Retry": [
+        		{
+        		  "ErrorEquals": [
+        			"Lambda.ServiceException",
+        			"Lambda.AWSLambdaException",
+        			"Lambda.SdkClientException"
+        		  ],
+        		  "IntervalSeconds": 2,
+        		  "MaxAttempts": 6,
+        		  "BackoffRate": 2
+        		}
+        	  ],
+        	  "Next": "22. Scale Down Instances"
+        	},
+        	"22. Scale Down Instances": {
+        	  "Type": "Task",
+        	  "Resource": "arn:aws:states:::lambda:invoke",
+        	  "ResultPath": null,
+        	  "Parameters": {
+        		"Payload.$": "$",
+        		"FunctionName": "${DummyFunctionArn}"
+        	  },
+        	  "Retry": [
+        		{
+        		  "ErrorEquals": [
+        			"Lambda.ServiceException",
+        			"Lambda.AWSLambdaException",
+        			"Lambda.SdkClientException"
+        		  ],
+        		  "IntervalSeconds": 2,
+        		  "MaxAttempts": 6,
+        		  "BackoffRate": 2
+        		}
+        	  ],
+        	  "Next": "23. Notify Success"
+        	},
+        	"23. Notify Success": {
+        	  "Type": "Task",
+        	  "Resource": "arn:aws:states:::sns:publish",
+        	  "Parameters": {
+        		"TopicArn": "${TopicArn}",
+        		"Message.$": "$"
+        	  },
+        	  "Next": "24. Overall Success"
+        	},
+        	"24. Overall Success": {
+        	  "Type": "Succeed"
+        	},
+        	"10. Wait For Scale up": {
+        	  "Type": "Wait",
+        	  "Seconds": 240,
+        	  "Next": "8. Check Scale up status"
+        	},
+        	"25. Notify Failures": {
+        	  "Type": "Task",
+        	  "Resource": "arn:aws:states:::sns:publish",
+        	  "Parameters": {
+        		"Message.$": "$",
+        		"TopicArn": "${TopicArn}"
+        	  },
+        	  "Next": "26. Overall Failed"
+        	},
+        	"26. Overall Failed": {
+        	  "Type": "Fail"
+        	}
+          }
+        }

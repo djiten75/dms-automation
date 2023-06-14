@@ -1,0 +1,262 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS Step Functions Example for DMS Automation'
+Parameters:
+  s3BucketForStepFunction:
+    Type: String
+    Description: S3 bucket where you have uploaded the step function json file.
+    
+  parentStepFunction:
+    Type: String
+    Default: parent_step_function.json
+  childStepFunction:
+    Type: String
+    Default: child_step_function.json
+    
+Resources:
+
+  # Lambda functions
+  DummyFunction: # Sample lambda function with do nothing implementation
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Code:
+        ZipFile: |
+            # Imports
+            import boto3
+            
+            def lambda_handler(event, context):
+                #"instance_status" : "Success",
+                #"scale_up_status" : "Success",
+
+                return {
+                    'statusCode': 200,
+                    "tasks_created": "Success",
+                    "endpoints_created" : "Success",
+                    "parallelMap": ["a","b","c"],
+                    "count_status" : "Success",
+                    "data_available_in_s3": "Success",
+                    "all_tasks_completed": "Success",
+                    "message" : "S"
+                }
+
+      Role: !GetAtt 'LambdaRole.Arn'
+      Runtime: 'python3.10'
+      Handler: index.lambda_handler
+
+
+  # Lambda functions
+  CheckDMSRepInstanceFunction: # Sample lambda function with do nothing implementation
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Code:
+        ZipFile: |
+            # Imports
+            import boto3
+            from botocore.exceptions import ClientError
+
+            def lambda_handler(event, context):
+
+                client = boto3.client('dms')
+                try:
+                    response = client.describe_replication_instances( Filters=[
+                        {
+                            'Name': 'replication-instance-id',
+                            'Values': [
+                                'dms-automation-instance'
+                            ]
+                        }
+                    ])
+                    if (len(response["ReplicationInstances"]) > 0):
+                        if (response["ReplicationInstances"][0]["ReplicationInstanceStatus"] == "available"):
+                            available_status = "Success"
+                        else:
+                            available_status = response["ReplicationInstances"][0]["ReplicationInstanceStatus"]
+                        return {"instance_exists":"Success", "instance_status":"Success", "scale_up_status": available_status}
+                        
+                except ClientError as e:
+                        return {"instance_exists":"Failed"}
+                except Exception as e: 
+                    return {"instance_exists":"Failed"}        
+      Role: !GetAtt 'DMSInstanceCheckLambdaRole.Arn'
+      Runtime: 'python3.10'
+      Handler: index.lambda_handler
+
+
+  # Lambda functions
+  CreateDMSRepInstanceFunction: # Sample lambda function with do nothing implementation
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Code:
+        ZipFile: |
+            # Imports
+            import boto3
+            from botocore.exceptions import ClientError
+
+            def lambda_handler(event, context):
+
+                client = boto3.client('dms')
+                try:
+                    response = client.describe_replication_instances( Filters=[
+                        {
+                            'Name': 'replication-instance-id',
+                            'Values': [
+                                'dms-automation-instance'
+                            ]
+                        }
+                    ])
+                    if (len(response["ReplicationInstances"]) > 0):
+                        return {"instance_create":"Success"}
+                except ClientError as e:
+                    if e.response['Error']['Code'] == 'ResourceNotFoundFault':
+                        response = client.create_replication_instance(ReplicationInstanceIdentifier="dms-automation-instance", ReplicationInstanceClass ="dms.c4.large")
+                        return {"instance_create":"Success"}
+                except Exception as e: 
+                    return {"instance_create":"Failed"}        
+            
+                
+      Role: !GetAtt 'DMSInstanceCreateLambdaRole.Arn'
+      Runtime: 'python3.10'
+      Handler: index.lambda_handler
+      Timeout: 20
+
+
+  # IAM roles
+  StepFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: states.amazonaws.com
+          Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: lambda
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action: 'lambda:InvokeFunction'
+            Resource:
+            - !GetAtt 'DummyFunction.Arn'
+            - !GetAtt 'CheckDMSRepInstanceFunction.Arn'
+            - !GetAtt 'CreateDMSRepInstanceFunction.Arn'
+          - Effect: Allow
+            Action: 'sns:Publish'
+            Resource:
+            - !GetAtt 'NotifyTopic.TopicArn'
+          - Effect: Allow
+            Action: 'states:*'
+            Resource: '*'
+          - Effect: Allow
+            Action: 'events:*'
+            Resource: '*'          
+  
+  LambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: lambda
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action: 'cloudwatch:*'
+            Resource: '*'
+
+  
+  DMSInstanceCheckLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: lambda
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action: 'dms:DescribeReplicationInstances'
+            Resource: '*'
+  
+  DMSInstanceCreateLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: lambda
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action: 
+              - 'dms:CreateReplicationInstance'
+              - 'dms:DescribeReplicationInstances'
+            Resource: '*'
+                        
+
+  NotifyTopic: 
+    Type: AWS::SNS::Topic
+    Properties: 
+      DisplayName: NotifyTopic
+      TopicName: NotifyTopic
+  
+  # Step functions state machine  
+  ParentStateMachine:
+    Type: 'AWS::StepFunctions::StateMachine'
+    Properties:
+      RoleArn: !GetAtt 'StepFunctionRole.Arn'
+      DefinitionS3Location:
+        Bucket: !Ref s3BucketForStepFunction
+        Key: !Ref parentStepFunction
+      DefinitionSubstitutions:
+        TopicArn: !GetAtt 'NotifyTopic.TopicArn'
+        DummyFunctionArn: !GetAtt 'DummyFunction.Arn'
+        CheckDMSRepInstanceFunctionArn: !GetAtt 'CheckDMSRepInstanceFunction.Arn'
+        CreateDMSRepInstanceFunctionArn: !GetAtt 'CreateDMSRepInstanceFunction.Arn'
+        ChildStateMachineArn: !GetAtt 'ChildStateMachine.Arn'
+
+  ChildStateMachine:
+    Type: 'AWS::StepFunctions::StateMachine'
+    Properties:
+      RoleArn: !GetAtt 'StepFunctionRole.Arn'
+      DefinitionS3Location:
+        Bucket: !Ref s3BucketForStepFunction
+        Key: !Ref childStepFunction
+      DefinitionSubstitutions:
+        TopicArn: !GetAtt 'NotifyTopic.TopicArn'
+        DummyFunctionArn: !GetAtt 'DummyFunction.Arn'
+        
+  DDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+       BillingMode: PAY_PER_REQUEST
+       AttributeDefinitions:
+         -
+           AttributeName: "TaskId"
+           AttributeType: "S"
+         -
+           AttributeName: "Status"
+           AttributeType: "S"
+       KeySchema:
+         -
+           AttributeName: "TaskId"
+           KeyType: "HASH"
+         -
+           AttributeName: "Status"
+           KeyType: "RANGE"
